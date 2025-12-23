@@ -32,10 +32,7 @@ jobs:
         # Ensuring dist/ and dist-electron/ are generated.
 
       - name: Build and Publish Electron App
-        uses: electron-userland/electron-builder-action@v5
-        with:
-          # Arguments to pass to electron-builder
-          args: --config --publish always
+        run: npx electron-builder --publish always
         env:
           # GitHub token, automatically provided to the action
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
