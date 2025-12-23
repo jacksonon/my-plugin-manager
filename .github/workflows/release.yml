@@ -1,0 +1,41 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on tags like v1.0.0, v0.1.0-alpha, etc.
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build React App & Electron Main Process
+        run: npm run build
+        # This runs: tsc -b && vite build && npm run electron:build
+        # Ensuring dist/ and dist-electron/ are generated.
+
+      - name: Build and Publish Electron App
+        uses: electron-userland/electron-builder-action@v5
+        with:
+          # Arguments to pass to electron-builder
+          args: --config --publish always
+        env:
+          # GitHub token, automatically provided to the action
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
