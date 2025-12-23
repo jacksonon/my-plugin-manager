@@ -283,9 +283,20 @@ export default function App() {
 
         <div className={`p-4 border-t ${theme.border}`}>
           <div className="flex flex-col gap-2 mb-2">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-                <Folder size={12} />
-                <span>Target Project:</span>
+            <div className="flex items-center justify-between text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                    <Folder size={12} />
+                    <span>Target Project:</span>
+                </div>
+                <button 
+                    onClick={async () => {
+                        const path = await window.electronAPI.selectDirectory();
+                        if (path) setProjectPath(path);
+                    }}
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                    Select
+                </button>
             </div>
             <input 
                 type="text" 
