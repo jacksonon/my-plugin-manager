@@ -5,4 +5,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('install-package', data),
   scanInstalled: (data: { engine: 'unreal' | 'unity', projectPath: string }) => 
     ipcRenderer.invoke('scan-installed', data),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings: any) => ipcRenderer.invoke('save-settings', settings),
 });

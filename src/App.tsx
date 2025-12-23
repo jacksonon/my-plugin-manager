@@ -1,241 +1,623 @@
 import { useState, useEffect } from 'react';
-import { Settings, Box, Gamepad2, FolderOpen, Download, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { Package, Download, Upload, Search, Settings, Layers, Folder, RefreshCw, CheckCircle, AlertCircle, Trash2, ArrowRight, Box, Save } from 'lucide-react';
 
-// Types
+// --- Types ---
 type Engine = 'unreal' | 'unity';
-type NavItem = 'project' | 'registry';
+type Tab = 'project' | 'registry' | 'publish' | 'settings';
 
-interface Package {
+interface RegistryPackage {
   id: string;
   name: string;
-  version: string;
+  version: string | null;
+  latest: string;
   description: string;
+  author: string;
+  category: string;
+  engines: Engine[];
+  dependencies: string[];
 }
 
-const MOCK_REGISTRY: Package[] = [
-  { id: 'com.example.physics', name: 'AdvPhysics', version: '1.2.0', description: 'Advanced physics simulation engine.' },
-  { id: 'com.example.net', name: 'EzNet', version: '2.0.1', description: 'Easy networking for multiplayer games.' },
-  { id: 'com.example.ui', name: 'SuperUI', version: '3.5.0', description: 'High performance UI components.' },
-  { id: 'com.example.analytics', name: 'GameStats', version: '1.0.0', description: 'Real-time player analytics.' },
+interface InstalledPackage {
+  id: string;
+  version: string;
+}
+
+interface AppSettings {
+  unreal: { release: string; snapshot: string };
+  unity: { release: string; snapshot: string };
+}
+
+// --- Mock Registry Data ---
+const MOCK_REMOTE_PACKAGES: RegistryPackage[] = [
+  {
+    id: 'com.company.network',
+    name: 'Core Networking',
+    version: '1.2.0',
+    latest: '1.2.0',
+    description: 'Standardized networking layer for all MMO projects.',
+    author: 'Tech Art Team',
+    category: 'Core',
+    engines: ['unreal', 'unity'],
+    dependencies: []
+  },
+  {
+    id: 'com.company.ui-kit',
+    name: 'Common UI Kit',
+    version: '2.0.1',
+    latest: '2.1.0',
+    description: 'Shared UMG/UGUI widgets and styles.',
+    author: 'UI Team',
+    category: 'UI',
+    engines: ['unreal', 'unity'],
+    dependencies: ['com.company.network']
+  },
+  {
+    id: 'com.company.analytics',
+    name: 'Game Analytics',
+    version: '0.9.0',
+    latest: '0.9.5',
+    description: 'Firebase and GA wrapper.',
+    author: 'Backend Team',
+    category: 'Services',
+    engines: ['unreal'],
+    dependencies: []
+  },
+  {
+    id: 'com.company.unity-tools',
+    name: 'Unity Editor Tools',
+    version: null,
+    latest: '3.0.0',
+    description: 'Custom inspectors and build pipeline tools.',
+    author: 'Tools Team',
+    category: 'Editor',
+    engines: ['unity'],
+    dependencies: []
+  },
+  {
+    id: 'com.company.interaction',
+    name: 'Interaction System',
+    version: null,
+    latest: '1.0.0',
+    description: 'GAS based interaction framework.',
+    author: 'Gameplay Team',
+    category: 'Gameplay',
+    engines: ['unreal'],
+    dependencies: []
+  }
 ];
 
-function App() {
+export default function App() {
   const [engine, setEngine] = useState<Engine>('unreal');
-  const [activeNav, setActiveNav] = useState<NavItem>('registry');
+  const [activeTab, setActiveTab] = useState<Tab>('project');
   const [projectPath, setProjectPath] = useState<string>('/Users/os/Documents/MyGameProject');
-  const [installed, setInstalled] = useState<{ id: string, version: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [installedPackages, setInstalledPackages] = useState<InstalledPackage[]>([]);
+  const [selectedPkg, setSelectedPkg] = useState<RegistryPackage | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [statusMsg, setStatusMsg] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Settings State
+  const [settings, setSettings] = useState<AppSettings>({
+    unreal: { release: '', snapshot: '' },
+    unity: { release: '', snapshot: '' }
+  });
 
+  // Load settings on mount
   useEffect(() => {
-    // Clear installed list on engine/path change
-    setInstalled([]);
-    setStatus(null);
+    window.electronAPI.getSettings().then(setSettings);
+  }, []);
+
+  // Scan when engine or path changes
+  useEffect(() => {
+    handleScan();
   }, [engine, projectPath]);
 
   const handleScan = async () => {
-    setLoading(true);
-    setStatus(null);
+    setSyncStatus('syncing');
+    setStatusMsg('Scanning...');
     try {
       const result = await window.electronAPI.scanInstalled({ engine, projectPath });
-      setInstalled(result);
-      setStatus({ type: 'success', msg: `Found ${result.length} packages.` });
-    } catch (e: any) {
-      setStatus({ type: 'error', msg: 'Scan failed. Check path.' });
-    } finally {
-      setLoading(false);
+      setInstalledPackages(result);
+      setSyncStatus('idle');
+      setStatusMsg('Ready');
+    } catch (e) {
+      setSyncStatus('error');
+      setStatusMsg('Scan failed');
     }
   };
 
-  const handleInstall = async (pkg: Package) => {
-    setLoading(true);
-    setStatus(null);
+  const handleInstall = async (pkgId: string, version: string) => {
+    setSyncStatus('syncing');
+    setStatusMsg(`Installing ${pkgId}...`);
     try {
       const res = await window.electronAPI.installPackage({
         engine,
         projectPath,
-        packageId: pkg.id,
-        version: pkg.version
+        packageId,
+        version
       });
 
       if (res.success) {
-        setStatus({ type: 'success', msg: res.message || 'Operation successful' });
-        handleScan(); // Refresh installed list
+        setSyncStatus('success');
+        setStatusMsg('Installed successfully');
+        handleScan(); // Refresh list
+        setTimeout(() => setSyncStatus('idle'), 2000);
       } else {
-        setStatus({ type: 'error', msg: res.error || 'Unknown error' });
+        setSyncStatus('error');
+        setStatusMsg(res.error || 'Install failed');
       }
     } catch (e: any) {
-      setStatus({ type: 'error', msg: e.message });
-    } finally {
-      setLoading(false);
+      setSyncStatus('error');
+      setStatusMsg(e.message);
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSyncStatus('syncing');
+    await window.electronAPI.saveSettings(settings);
+    setSyncStatus('success');
+    setStatusMsg('Settings saved');
+    setTimeout(() => setSyncStatus('idle'), 2000);
+  };
+
+  const handleUninstall = async (pkgId: string) => {
+    // Placeholder: Real uninstall logic would be needed in electronAPI
+    alert("Uninstall not implemented in this demo.");
+  };
+
+  // Filter packages based on active tab and search
+  const displayedPackages = activeTab === 'project'
+    ? MOCK_REMOTE_PACKAGES.filter(p => installedPackages.some(i => i.id === p.id))
+    : MOCK_REMOTE_PACKAGES.filter(p => p.engines.includes(engine));
+
+  const filteredPackages = displayedPackages.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Theme Config
+  const theme = engine === 'unreal' ? {
+    bg: 'bg-slate-900',
+    sidebar: 'bg-slate-950',
+    accent: 'bg-blue-600',
+    textAccent: 'text-blue-400',
+    border: 'border-slate-800',
+    icon: 'U',
+    path: 'Plugins/'
+  } : {
+    bg: 'bg-zinc-900',
+    sidebar: 'bg-black',
+    accent: 'bg-gray-200 text-black',
+    textAccent: 'text-zinc-200',
+    border: 'border-zinc-800',
+    icon: 'Unity',
+    path: 'Packages/'
+  };
+
   return (
-    <div className="flex h-screen bg-neutral-900 text-gray-100 font-sans overflow-hidden">
+    <div className={`flex h-screen ${theme.bg} text-slate-200 font-sans overflow-hidden transition-colors duration-500`}>
       {/* Sidebar */}
-      <aside className="w-64 bg-neutral-950 border-r border-neutral-800 flex flex-col">
-        <div className="p-4 flex items-center gap-2 border-b border-neutral-800">
-          <Box className="text-blue-500" />
-          <h1 className="font-bold text-lg tracking-tight">GamePack</h1>
+      <div className={`w-64 ${theme.sidebar} border-r ${theme.border} flex flex-col`}>
+        <div className={`p-4 flex items-center gap-2 border-b ${theme.border}`}>
+          <div className={`w-8 h-8 ${engine === 'unreal' ? 'bg-blue-600' : 'bg-white'} rounded flex items-center justify-center transition-colors`}>
+            {engine === 'unreal' ? (
+                <span className="font-bold text-white">U</span>
+            ) : (
+                <Box size={20} className="text-black fill-black" />
+            )}
+          </div>
+          <span className="font-bold text-lg tracking-tight">Plugin Manager</span>
         </div>
 
-        <div className="p-4 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Engine</label>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setEngine('unreal')}
-                className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${
-                  engine === 'unreal' 
-                    ? 'bg-blue-900/20 border-blue-500 text-blue-400' 
-                    : 'bg-neutral-900 border-neutral-800 text-gray-400 hover:bg-neutral-800'
-                }`}
-              >
-                <Gamepad2 size={24} />
-                <span className="text-xs mt-1">Unreal</span>
-              </button>
-              <button
-                onClick={() => setEngine('unity')}
-                className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${
-                  engine === 'unity' 
-                    ? 'bg-indigo-900/20 border-indigo-500 text-indigo-400' 
-                    : 'bg-neutral-900 border-neutral-800 text-gray-400 hover:bg-neutral-800'
-                }`}
-              >
-                <Box size={24} />
-                <span className="text-xs mt-1">Unity</span>
-              </button>
+        {/* Engine Switcher */}
+        <div className="px-2 py-3">
+          <div className={`flex bg-gray-800/50 p-1 rounded-lg border ${theme.border}`}>
+             <button 
+               onClick={() => setEngine('unreal')}
+               className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${engine === 'unreal' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+             >
+               Unreal Engine
+             </button>
+             <button 
+               onClick={() => setEngine('unity')}
+               className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${engine === 'unity' ? 'bg-white text-black shadow' : 'text-slate-400 hover:text-white'}`}
+             >
+               Unity
+             </button>
+          </div>
+        </div>
+
+        <nav className="flex-1 p-2 space-y-1">
+          <button
+            onClick={() => { setActiveTab('project'); setSelectedPkg(null); }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'project' ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-slate-400'}`}
+          >
+            <Layers size={18} />
+            In Project
+          </button>
+          <button
+            onClick={() => { setActiveTab('registry'); setSelectedPkg(null); }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'registry' ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-slate-400'}`}
+          >
+            <Download size={18} />
+            Nexus Registry
+          </button>
+          <button
+            onClick={() => { setActiveTab('publish'); setSelectedPkg(null); }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'publish' ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-slate-400'}`}
+          >
+            <Upload size={18} />
+            Publish Tool
+          </button>
+        </nav>
+
+        <div className="p-2 border-t border-b border-gray-800">
+           <button
+            onClick={() => { setActiveTab('settings'); setSelectedPkg(null); }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'settings' ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-slate-400'}`}
+          >
+            <Settings size={18} />
+            Settings
+          </button>
+        </div>
+
+        <div className={`p-4 border-t ${theme.border}`}>
+          <div className="flex flex-col gap-2 mb-2">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Folder size={12} />
+                <span>Target Project:</span>
             </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Navigation</label>
-            <nav className="mt-2 space-y-1">
-              <button
-                onClick={() => setActiveNav('project')}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                  activeNav === 'project' ? 'bg-neutral-800 text-white' : 'text-gray-400 hover:bg-neutral-900'
-                }`}
-              >
-                <FolderOpen size={18} />
-                Installed
-              </button>
-              <button
-                onClick={() => setActiveNav('registry')}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                  activeNav === 'registry' ? 'bg-neutral-800 text-white' : 'text-gray-400 hover:bg-neutral-900'
-                }`}
-              >
-                <Settings size={18} />
-                Registry
-              </button>
-            </nav>
-          </div>
-        </div>
-        
-        <div className="mt-auto p-4 border-t border-neutral-800">
-           <div className="text-xs text-gray-600">v0.1.0 Beta</div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="h-16 border-b border-neutral-800 flex items-center justify-between px-6 bg-neutral-900/50 backdrop-blur-sm">
-          <div className="flex items-center gap-4 w-full max-w-2xl">
-             <div className="flex-shrink-0 text-gray-400">Project Path:</div>
-             <input 
+            <input 
                 type="text" 
                 value={projectPath}
                 onChange={(e) => setProjectPath(e.target.value)}
-                className="flex-1 bg-neutral-950 border border-neutral-800 rounded px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-blue-500 transition-colors"
-             />
-             <button onClick={handleScan} className="p-2 bg-neutral-800 hover:bg-neutral-700 rounded text-gray-300 transition-colors" title="Scan Project">
-                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-             </button>
+                className="bg-black/30 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-white/30 w-full"
+            />
           </div>
-        </header>
+          <div className="flex items-center gap-2 text-xs text-green-500">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            Nexus Online
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className={`h-16 border-b ${theme.border} bg-opacity-50 flex items-center justify-between px-6`}>
+          <div className="text-lg font-medium text-white">
+            {activeTab === 'project' && `Installed ${engine === 'unreal' ? 'Plugins' : 'Packages'}`}
+            {activeTab === 'registry' && 'Browse Packages'}
+            {activeTab === 'publish' && 'Publish to Nexus'}
+            {activeTab === 'settings' && 'Registry Settings'}
+          </div>
+          
+          <div className="flex items-center gap-4">
+             {/* Sync Indicator */}
+             {syncStatus !== 'idle' && (
+              <div className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-full border ${syncStatus === 'error' ? 'bg-red-900/20 border-red-800' : 'bg-slate-800 border-slate-700'}`}>
+                {syncStatus === 'syncing' ? (
+                   <RefreshCw size={14} className={`animate-spin ${theme.textAccent}`} />
+                ) : syncStatus === 'success' ? (
+                   <CheckCircle size={14} className="text-green-400" />
+                ) : (
+                   <AlertCircle size={14} className="text-red-400" />
+                )}
+                <span className={syncStatus === 'success' ? 'text-green-400' : syncStatus === 'error' ? 'text-red-400' : 'text-slate-300'}>
+                  {statusMsg || 'Ready'}
+                </span>
+              </div>
+            )}
+            
+            {activeTab !== 'settings' && (
+                <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input 
+                    type="text" 
+                    placeholder="Search packages..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-black/20 border border-white/10 rounded-full pl-10 pr-4 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-white/30 w-64"
+                />
+                </div>
+            )}
+          </div>
+        </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-auto p-6">
-          {status && (
-            <div className={`mb-4 px-4 py-3 rounded border flex items-center gap-2 ${
-              status.type === 'success' ? 'bg-green-900/20 border-green-800 text-green-300' : 'bg-red-900/20 border-red-800 text-red-300'
-            }`}>
-              {status.type === 'success' ? <CheckCircle size={18} /> : <XCircle size={18} />}
-              <span className="text-sm">{status.msg}</span>
-            </div>
-          )}
+        <div className="flex-1 flex overflow-hidden">
+            {activeTab === 'settings' ? (
+                <div className="p-8 w-full max-w-3xl mx-auto overflow-y-auto">
+                    <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                        <Settings className="text-slate-400" />
+                        Package Registry Configuration
+                    </h2>
+                    
+                    <div className="space-y-8">
+                        {/* Unreal Settings */}
+                        <div className="bg-slate-950/50 border border-blue-900/30 rounded-lg p-6">
+                            <h3 className="text-blue-400 font-semibold mb-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                Unreal Engine Source
+                            </h3>
+                            <div className="grid gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">RELEASE REGISTRY URL</label>
+                                    <input 
+                                        type="text" 
+                                        value={settings.unreal.release}
+                                        onChange={(e) => setSettings({...settings, unreal: {...settings.unreal, release: e.target.value}})}
+                                        placeholder="https://nexus.company.com/repository/npm-release/"
+                                        className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none transition-colors"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">SNAPSHOT REGISTRY URL</label>
+                                    <input 
+                                        type="text" 
+                                        value={settings.unreal.snapshot}
+                                        onChange={(e) => setSettings({...settings, unreal: {...settings.unreal, snapshot: e.target.value}})}
+                                        placeholder="https://nexus.company.com/repository/npm-snapshot/"
+                                        className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none transition-colors"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
-          {activeNav === 'registry' && (
-            <div>
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Settings className="text-purple-400" />
-                Package Registry
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {MOCK_REGISTRY.map(pkg => (
-                  <div key={pkg.id} className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 hover:border-neutral-700 transition-all group">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-white group-hover:text-blue-400 transition-colors">{pkg.name}</h3>
-                      <span className="text-xs bg-neutral-900 text-gray-500 px-2 py-0.5 rounded border border-neutral-800">{pkg.version}</span>
-                    </div>
-                    <p className="text-sm text-gray-400 mb-4 h-10 line-clamp-2">{pkg.description}</p>
-                    <div className="flex items-center justify-between mt-auto">
-                      <code className="text-xs text-gray-600 bg-neutral-900 px-1.5 py-0.5 rounded">{pkg.id}</code>
-                      <button 
-                        onClick={() => handleInstall(pkg)}
-                        disabled={loading}
-                        className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs px-3 py-1.5 rounded transition-colors"
-                      >
-                        <Download size={14} />
-                        Install
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                        {/* Unity Settings */}
+                        <div className="bg-slate-950/50 border border-zinc-800 rounded-lg p-6">
+                            <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-white"></span>
+                                Unity Source
+                            </h3>
+                            <div className="grid gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">RELEASE SCOPED REGISTRY URL</label>
+                                    <input 
+                                        type="text" 
+                                        value={settings.unity.release}
+                                        onChange={(e) => setSettings({...settings, unity: {...settings.unity, release: e.target.value}})}
+                                        placeholder="https://nexus.company.com/repository/upm-release/"
+                                        className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-white focus:outline-none transition-colors"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-500 mb-1">SNAPSHOT SCOPED REGISTRY URL</label>
+                                    <input 
+                                        type="text" 
+                                        value={settings.unity.snapshot}
+                                        onChange={(e) => setSettings({...settings, unity: {...settings.unity, snapshot: e.target.value}})}
+                                        placeholder="https://nexus.company.com/repository/upm-snapshot/"
+                                        className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-white focus:outline-none transition-colors"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
-          {activeNav === 'project' && (
-            <div>
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <FolderOpen className="text-yellow-400" />
-                Installed Packages
-              </h2>
-              {installed.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 border border-dashed border-neutral-800 rounded-lg">
-                  <p>No packages found or scan not run.</p>
-                  <button onClick={handleScan} className="text-blue-400 hover:underline mt-2 text-sm">Scan Now</button>
-                </div>
-              ) : (
-                <div className="bg-neutral-950 border border-neutral-800 rounded-lg divide-y divide-neutral-800">
-                  {installed.map((pkg, idx) => (
-                    <div key={idx} className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                         <div className="w-8 h-8 rounded bg-neutral-900 flex items-center justify-center text-gray-500 font-bold text-xs">
-                           PKG
-                         </div>
-                         <div>
-                           <div className="font-medium text-gray-200">{pkg.id}</div>
-                         </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-gray-500">v{pkg.version}</span>
-                        <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                      </div>
+                        <div className="flex justify-end pt-4">
+                            <button 
+                                onClick={handleSaveSettings}
+                                className="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded font-medium flex items-center gap-2 transition-colors"
+                            >
+                                <Save size={18} />
+                                Save Configuration
+                            </button>
+                        </div>
                     </div>
-                  ))}
                 </div>
-              )}
+            ) : (
+            <>
+            {/* List View */}
+            <div className={`w-1/2 overflow-y-auto border-r ${theme.border} p-4 space-y-2`}>
+                {activeTab === 'publish' ? (
+                    <PublishView engine={engine} theme={theme} />
+                ) : filteredPackages.length > 0 ? (
+                filteredPackages.map(pkg => {
+                    const installed = installedPackages.find(i => i.id === pkg.id);
+                    const isUpdateAvailable = installed && installed.version !== pkg.latest;
+                    
+                    return (
+                    <div 
+                        key={pkg.id}
+                        onClick={() => setSelectedPkg(pkg)}
+                        className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedPkg?.id === pkg.id 
+                        ? 'bg-white/10 border-white/30' 
+                        : 'bg-white/5 border-white/5 hover:border-white/20'}`}
+                    >
+                        <div className="flex justify-between items-start mb-1">
+                        <h3 className="font-semibold text-slate-200">{pkg.name}</h3>
+                        {installed && (
+                            <span className="text-xs bg-white/10 text-slate-300 px-2 py-0.5 rounded">
+                            v{installed.version}
+                            </span>
+                        )}
+                        </div>
+                        <p className="text-sm text-slate-400 mb-3 line-clamp-2">{pkg.description}</p>
+                        <div className="flex items-center gap-3 text-xs text-slate-500">
+                        <span>{pkg.id}</span>
+                        {pkg.engines.length > 1 && (
+                            <span className="text-slate-600 flex items-center gap-1">
+                                <Box size={10} /> Multi-Engine
+                            </span>
+                        )}
+                        {isUpdateAvailable && (
+                            <span className="flex items-center gap-1 text-amber-400">
+                            <AlertCircle size={12} />
+                            v{pkg.latest}
+                            </span>
+                        )}
+                        </div>
+                    </div>
+                    );
+                })
+                ) : (
+                <div className="text-center text-slate-500 mt-20">
+                    <Package size={48} className="mx-auto mb-4 opacity-20" />
+                    <p>No packages found for {engine === 'unreal' ? 'Unreal' : 'Unity'}.</p>
+                </div>
+                )}
             </div>
-          )}
+
+            {/* Details View */}
+            <div className="w-1/2 bg-black/20 p-6 overflow-y-auto">
+                {selectedPkg ? (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-mono bg-white/10 text-slate-300 px-2 py-0.5 rounded border border-white/10">
+                        {selectedPkg.category}
+                        </span>
+                        <span className="text-xs text-slate-500">Authored by {selectedPkg.author}</span>
+                    </div>
+                    <h1 className="text-3xl font-bold text-white mb-2">{selectedPkg.name}</h1>
+                    <code className="text-sm text-slate-500">{selectedPkg.id}</code>
+                    </div>
+
+                    <div className="p-4 bg-black/40 rounded border border-white/10">
+                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Description</h3>
+                    <p className="text-slate-300 leading-relaxed">{selectedPkg.description}</p>
+                    </div>
+
+                    <div className="space-y-4">
+                    <div className="flex items-center justify-between text-sm py-2 border-b border-white/5">
+                        <span className="text-slate-400">Latest Version</span>
+                        <span className="text-white font-mono">{selectedPkg.latest}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm py-2 border-b border-white/5">
+                        <span className="text-slate-400">Supported Engines</span>
+                        <div className="flex gap-2">
+                            {selectedPkg.engines.map(e => (
+                                <span key={e} className="text-xs bg-white/10 px-2 py-1 rounded capitalize text-slate-300">{e}</span>
+                            ))}
+                        </div>
+                    </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="pt-4">
+                    {(() => {
+                        const installed = installedPackages.find(i => i.id === selectedPkg.id);
+                        
+                        if (!installed) {
+                        return (
+                            <button 
+                            onClick={() => handleInstall(selectedPkg.id, selectedPkg.latest)}
+                            disabled={syncStatus === 'syncing'}
+                            className={`w-full py-3 ${engine === 'unreal' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-200 hover:bg-white text-black'} rounded-md font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50`}
+                            >
+                            <Download size={18} />
+                            Install v{selectedPkg.latest}
+                            </button>
+                        );
+                        }
+
+                        if (installed.version !== selectedPkg.latest) {
+                        return (
+                            <div className="flex gap-2">
+                            <button 
+                                onClick={() => handleInstall(selectedPkg.id, selectedPkg.latest)}
+                                disabled={syncStatus === 'syncing'}
+                                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-md font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                            >
+                                <RefreshCw size={18} />
+                                Update to v{selectedPkg.latest}
+                            </button>
+                            <button 
+                                onClick={() => handleUninstall(selectedPkg.id)}
+                                disabled={syncStatus === 'syncing'}
+                                className="px-4 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900 rounded-md transition-colors"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                            </div>
+                        );
+                        }
+
+                        return (
+                        <div className="flex gap-2">
+                            <button 
+                                className="flex-1 py-3 bg-white/5 text-slate-400 cursor-not-allowed rounded-md font-medium flex items-center justify-center gap-2"
+                                disabled
+                            >
+                                <CheckCircle size={18} />
+                                Up to Date (v{installed.version})
+                            </button>
+                            <button 
+                                onClick={() => handleUninstall(selectedPkg.id)}
+                                disabled={syncStatus === 'syncing'}
+                                className="px-4 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900 rounded-md transition-colors"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                        );
+                    })()}
+                    
+                    <div className="mt-4 p-3 bg-white/5 rounded text-xs text-slate-500 flex items-start gap-2">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                        {engine === 'unreal' ? (
+                            <p>
+                            Installing will update <code>package.json</code> and sync contents to <code>Plugins/{selectedPkg.name}</code>.
+                            </p>
+                        ) : (
+                            <p>
+                            Installing will update <code>Packages/manifest.json</code>. Unity UPM will handle the download automatically.
+                            </p>
+                        )}
+                    </div>
+                    </div>
+
+                </div>
+                ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-600">
+                    <Settings size={64} className="mb-4 opacity-20" />
+                    <p>Select a package to view details</p>
+                </div>
+                )}
+            </div>
+            </>
+            )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
 
-export default App;
+// Publish Component Mock
+function PublishView({ engine, theme }: { engine: string, theme: any }) {
+  const isUE = engine === 'unreal';
+  const folder = isUE ? 'Plugins/' : 'Packages/';
+  
+  return (
+    <div className="p-4 space-y-4">
+      <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+        <h3 className="text-white font-medium mb-2">Local {isUE ? 'Plugin' : 'Package'} Discovery</h3>
+        <p className="text-sm text-slate-400 mb-4">
+          Scan your <code>{folder}</code> folder to generate {isUE ? 'package.json' : 'package.json'} and publish to Nexus.
+        </p>
+        
+        <div className="space-y-2">
+           <div className="flex items-center justify-between p-3 bg-black/20 rounded border border-white/10">
+              <div className="flex items-center gap-3">
+                 <Folder size={16} className={isUE ? "text-blue-400" : "text-white"} />
+                 <div>
+                    <div className="text-sm text-slate-200">{folder}MyCombatSystem</div>
+                    <div className="text-xs text-slate-500">v1.0.0 • Not Published</div>
+                 </div>
+              </div>
+              <button className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded flex items-center gap-1">
+                 Prepare <ArrowRight size={12}/>
+              </button>
+           </div>
+        </div>
+      </div>
+      
+      <div className={`${isUE ? 'bg-blue-900/10 border-blue-900/30' : 'bg-zinc-800 border-zinc-700'} border rounded-lg p-4`}>
+         <h4 className={`${isUE ? 'text-blue-400' : 'text-slate-300'} text-sm font-bold mb-1`}>CLI Command Preview</h4>
+         <code className="text-xs text-slate-400 font-mono block">
+            npm publish ./{folder}MyCombatSystem --registry=https://nexus.company.com/repository/npm-private/
+         </code>
+      </div>
+    </div>
+  )
+}

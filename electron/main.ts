@@ -35,10 +35,42 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// --- Config Management ---
+const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+const loadConfig = () => {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    }
+  } catch (e) {
+    console.error('Failed to load config', e);
+  }
+  return {
+    unreal: { release: 'https://registry.npmjs.org/', snapshot: '' },
+    unity: { release: '', snapshot: '' }
+  };
+};
+
+ipcMain.handle('get-settings', async () => {
+  return loadConfig();
+});
+
+ipcMain.handle('save-settings', async (event, settings) => {
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(settings, null, 2));
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+});
+
 // --- IPC Handlers ---
 
 ipcMain.handle('install-package', async (event, { engine, projectPath, packageId, version }) => {
   try {
+    const config = loadConfig();
+
     if (engine === 'unreal') {
       // 1. Ensure Scripts directory exists in target
       const targetScriptsDir = path.join(projectPath, 'Scripts');
@@ -46,13 +78,26 @@ ipcMain.handle('install-package', async (event, { engine, projectPath, packageId
         fs.mkdirSync(targetScriptsDir, { recursive: true });
       }
 
-      // 2. Copy our sync script to the target project (so 'node Scripts/sync-plugins.js' works)
+      // 2. Copy our sync script
       const sourceSyncScript = path.join(process.cwd(), 'scripts', 'sync-plugins.js');
       const targetSyncScript = path.join(targetScriptsDir, 'sync-plugins.js');
-      fs.copyFileSync(sourceSyncScript, targetSyncScript);
+      // Ensure source exists (development vs production paths might differ)
+      if (fs.existsSync(sourceSyncScript)) {
+         fs.copyFileSync(sourceSyncScript, targetSyncScript);
+      }
 
-      // 3. Run npm install
-      await execPromise(`npm install ${packageId}@${version}`, { cwd: projectPath });
+      // 3. Construct npm install command with registry
+      // Prioritize snapshot if version contains '-' (e.g. 1.0.0-beta), otherwise release
+      // This is a simple heuristic.
+      let registryUrl = config.unreal.release;
+      if (version.includes('-') && config.unreal.snapshot) {
+        registryUrl = config.unreal.snapshot;
+      }
+      
+      const registryFlag = registryUrl ? ` --registry=${registryUrl}` : '';
+      const installCmd = `npm install ${packageId}@${version}${registryFlag}`;
+      
+      await execPromise(installCmd, { cwd: projectPath });
       
       // 4. Run sync script
       await execPromise(`node Scripts/sync-plugins.js`, { cwd: projectPath });
@@ -67,6 +112,14 @@ ipcMain.handle('install-package', async (event, { engine, projectPath, packageId
       manifest.dependencies = manifest.dependencies || {};
       manifest.dependencies[packageId] = version;
       
+      // Optional: Add scopedRegistry if configured (Basic implementation)
+      if (config.unity.release) {
+        manifest.scopedRegistries = manifest.scopedRegistries || [];
+        // Check if we need to add a registry entry for this scope (assuming scope from packageId)
+        // For now, we won't auto-modify scopedRegistries to avoid breaking existing setups purely on install
+        // But the user asked for "Setting source location", so saving it in config is the first step.
+      }
+
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
       return { success: true, message: 'Unity manifest updated.' };
     }
