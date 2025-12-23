@@ -57,7 +57,7 @@ program
     }
 
     try {
-      let packages = [];
+      let packages: { id: string; version: string }[] = [];
       if (engine === 'unreal') {
         const pkgJson = path.join(projectPath, 'package.json');
         if (fs.existsSync(pkgJson)) {

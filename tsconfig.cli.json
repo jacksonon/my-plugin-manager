@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "outDir": "dist-cli",
     "strict": true,
     "esModuleInterop": true,
