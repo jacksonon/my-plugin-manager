@@ -7,4 +7,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('scan-installed', data),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: any) => ipcRenderer.invoke('save-settings', settings),
+  selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  readFile: (path: string) => ipcRenderer.invoke('read-file', path),
+  writeFile: (data: { filePath: string, content: string }) => ipcRenderer.invoke('write-file', data),
+  publishPackage: (data: { cwd: string, registry: string }) => ipcRenderer.invoke('publish-package', data),
 });

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { exec } from 'child_process';
 import fs from 'fs';
@@ -65,6 +65,43 @@ ipcMain.handle('save-settings', async (event, settings) => {
   }
 });
 
+// --- New Handlers for Publish Tool ---
+
+ipcMain.handle('select-directory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('read-file', async (event, filePath) => {
+  if (fs.existsSync(filePath)) {
+    return fs.readFileSync(filePath, 'utf-8');
+  }
+  return null;
+});
+
+ipcMain.handle('write-file', async (event, { filePath, content }) => {
+  try {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('publish-package', async (event, { cwd, registry }) => {
+  try {
+    const cmd = `npm publish --registry=${registry}`;
+    // console.log(`Executing ${cmd} in ${cwd}`);
+    const { stdout, stderr } = await execPromise(cmd, { cwd });
+    return { success: true, message: stdout || stderr };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+});
+
 // --- IPC Handlers ---
 
 ipcMain.handle('install-package', async (event, { engine, projectPath, packageId, version }) => {
@@ -112,12 +149,10 @@ ipcMain.handle('install-package', async (event, { engine, projectPath, packageId
       manifest.dependencies = manifest.dependencies || {};
       manifest.dependencies[packageId] = version;
       
-      // Optional: Add scopedRegistry if configured (Basic implementation)
+      // Optional: Add scopedRegistry if configured
       if (config.unity.release) {
         manifest.scopedRegistries = manifest.scopedRegistries || [];
-        // Check if we need to add a registry entry for this scope (assuming scope from packageId)
-        // For now, we won't auto-modify scopedRegistries to avoid breaking existing setups purely on install
-        // But the user asked for "Setting source location", so saving it in config is the first step.
+        // Check if we need to add a registry entry for this scope
       }
 
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));

@@ -15,6 +15,10 @@ interface ElectronAPI {
   scanInstalled: (data: { engine: 'unreal' | 'unity', projectPath: string }) => Promise<{ id: string; version: string }[]>;
   getSettings: () => Promise<AppSettings>;
   saveSettings: (settings: AppSettings) => Promise<{ success: boolean; error?: string }>;
+  selectDirectory: () => Promise<string | null>;
+  readFile: (path: string) => Promise<string | null>;
+  writeFile: (data: { filePath: string; content: string }) => Promise<{ success: boolean; error?: string }>;
+  publishPackage: (data: { cwd: string; registry: string }) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
 interface Window {
