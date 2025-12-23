@@ -1,6 +1,6 @@
 {
   "name": "my-plugin-manager",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "bin": {

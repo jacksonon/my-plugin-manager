@@ -27,69 +27,10 @@ interface AppSettings {
   unity: { release: string; snapshot: string };
 }
 
-// --- Mock Registry Data ---
-const MOCK_REMOTE_PACKAGES: RegistryPackage[] = [
-  {
-    id: 'com.company.network',
-    name: 'Core Networking',
-    version: '1.2.0',
-    latest: '1.2.0',
-    description: 'Standardized networking layer for all MMO projects.',
-    author: 'Tech Art Team',
-    category: 'Core',
-    engines: ['unreal', 'unity'],
-    dependencies: []
-  },
-  {
-    id: 'com.company.ui-kit',
-    name: 'Common UI Kit',
-    version: '2.0.1',
-    latest: '2.1.0',
-    description: 'Shared UMG/UGUI widgets and styles.',
-    author: 'UI Team',
-    category: 'UI',
-    engines: ['unreal', 'unity'],
-    dependencies: ['com.company.network']
-  },
-  {
-    id: 'com.company.analytics',
-    name: 'Game Analytics',
-    version: '0.9.0',
-    latest: '0.9.5',
-    description: 'Firebase and GA wrapper.',
-    author: 'Backend Team',
-    category: 'Services',
-    engines: ['unreal'],
-    dependencies: []
-  },
-  {
-    id: 'com.company.unity-tools',
-    name: 'Unity Editor Tools',
-    version: null,
-    latest: '3.0.0',
-    description: 'Custom inspectors and build pipeline tools.',
-    author: 'Tools Team',
-    category: 'Editor',
-    engines: ['unity'],
-    dependencies: []
-  },
-  {
-    id: 'com.company.interaction',
-    name: 'Interaction System',
-    version: null,
-    latest: '1.0.0',
-    description: 'GAS based interaction framework.',
-    author: 'Gameplay Team',
-    category: 'Gameplay',
-    engines: ['unreal'],
-    dependencies: []
-  }
-];
-
 export default function App() {
   const [engine, setEngine] = useState<Engine>('unreal');
   const [activeTab, setActiveTab] = useState<Tab>('project');
-  const [projectPath, setProjectPath] = useState<string>('/Users/os/Documents/MyGameProject');
+  const [projectPath, setProjectPath] = useState<string>('');
   const [installedPackages, setInstalledPackages] = useState<InstalledPackage[]>([]);
   const [selectedPkg, setSelectedPkg] = useState<RegistryPackage | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -109,7 +50,9 @@ export default function App() {
 
   // Scan when engine or path changes
   useEffect(() => {
-    handleScan();
+    if (projectPath) {
+      handleScan();
+    }
   }, [engine, projectPath]);
 
   const handleScan = async () => {
@@ -161,33 +104,28 @@ export default function App() {
   };
 
   const handleUninstall = async (pkgId: string) => {
-    // Placeholder: Real uninstall logic would be needed in electronAPI
     console.log(`Uninstalling ${pkgId}`);
     alert("Uninstall not implemented in this demo.");
   };
 
-  // Filter packages based on active tab and search
+  // Logic to build display list without mock data
   const displayedPackages: RegistryPackage[] = (() => {
     if (activeTab === 'project') {
-      return installedPackages.map(inst => {
-        const meta = MOCK_REMOTE_PACKAGES.find(p => p.id === inst.id);
-        if (meta) {
-          return { ...meta, version: inst.version };
-        }
-        return {
-          id: inst.id,
-          name: inst.id,
-          version: inst.version,
-          latest: '?',
-          description: 'Local package not found in registry.',
-          author: 'Unknown',
-          category: 'Local',
-          engines: [engine],
-          dependencies: []
-        };
-      });
+      // Show only installed packages
+      return installedPackages.map(inst => ({
+        id: inst.id,
+        name: inst.id,
+        version: inst.version,
+        latest: '?', // We don't know latest without a registry query
+        description: 'Local package.',
+        author: 'Unknown',
+        category: 'Local',
+        engines: [engine],
+        dependencies: []
+      }));
     }
-    return MOCK_REMOTE_PACKAGES.filter(p => p.engines.includes(engine));
+    // Registry tab is currently empty as we removed mock data and don't have a real search API yet
+    return [];
   })();
 
   const filteredPackages = displayedPackages.filter(p => 
@@ -318,7 +256,7 @@ export default function App() {
         <div className={`h-16 border-b ${theme.border} bg-opacity-50 flex items-center justify-between px-6`}>
           <div className="text-lg font-medium text-white">
             {activeTab === 'project' && `Installed ${engine === 'unreal' ? 'Plugins' : 'Packages'}`}
-            {activeTab === 'registry' && 'Browse Packages'}
+            {activeTab === 'registry' && 'Nexus Registry'}
             {activeTab === 'publish' && 'Publish to Nexus'}
             {activeTab === 'settings' && 'Registry Settings'}
           </div>
@@ -345,7 +283,7 @@ export default function App() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                 <input 
                     type="text" 
-                    placeholder="Search packages..."
+                    placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="bg-black/20 border border-white/10 rounded-full pl-10 pr-4 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-white/30 w-64"
@@ -368,14 +306,14 @@ export default function App() {
                 {filteredPackages.length > 0 ? (
                 filteredPackages.map(pkg => {
                     const installed = installedPackages.find(i => i.id === pkg.id);
-                    const isUpdateAvailable = installed && installed.version !== pkg.latest;
+                    const isUpdateAvailable = installed && pkg.latest !== '?' && installed.version !== pkg.latest;
                     
                     return (
                     <div 
                         key={pkg.id}
                         onClick={() => setSelectedPkg(pkg)}
                         className={`p-4 rounded-lg border cursor-pointer transition-all ${selectedPkg?.id === pkg.id 
-                        ? 'bg-white/10 border-white/30'
+                        ? 'bg-white/10 border-white/30' 
                         : 'bg-white/5 border-white/5 hover:border-white/20'}`}
                     >
                         <div className="flex justify-between items-start mb-1">
@@ -407,7 +345,11 @@ export default function App() {
                 ) : (
                 <div className="text-center text-slate-500 mt-20">
                     <Package size={48} className="mx-auto mb-4 opacity-20" />
-                    <p>No packages found.</p>
+                    <p>
+                        {activeTab === 'registry' 
+                            ? "No packages found in registry (Search API pending)." 
+                            : "No installed packages found."}
+                    </p>
                 </div>
                 )}
             </div>
@@ -455,16 +397,16 @@ export default function App() {
                         return (
                             <button 
                             onClick={() => handleInstall(selectedPkg.id, selectedPkg.latest)}
-                            disabled={syncStatus === 'syncing'}
+                            disabled={syncStatus === 'syncing' || selectedPkg.latest === '?'} // Disable if syncing or latest version is unknown
                             className={`w-full py-3 ${engine === 'unreal' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-200 hover:bg-white text-black'} rounded-md font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50`}
                             >
                             <Download size={18} />
-                            Install v{selectedPkg.latest}
+                            Install {selectedPkg.latest !== '?' ? `v${selectedPkg.latest}` : 'Latest'}
                             </button>
                         );
                         }
 
-                        if (installed.version !== selectedPkg.latest) {
+                        if (installed.version !== selectedPkg.latest && selectedPkg.latest !== '?') {
                         return (
                             <div className="flex gap-2">
                             <button 
@@ -510,11 +452,11 @@ export default function App() {
                         <AlertCircle size={14} className="mt-0.5 shrink-0" />
                         {engine === 'unreal' ? (
                             <p>
-                            Installing will update <code>package.json</code> and sync contents to <code>Plugins/{selectedPkg.name}</code>.
+                            Installing will update `package.json` and sync contents to `Plugins/{selectedPkg.name}`.
                             </p>
                         ) : (
                             <p>
-                            Installing will update <code>Packages/manifest.json</code>. Unity UPM will handle the download automatically.
+                            Installing will update `Packages/manifest.json`. Unity UPM will handle the download automatically.
                             </p>
                         )}
                     </div>
@@ -638,14 +580,6 @@ function PublishView({ engine, settings }: { engine: string, settings: any }) {
 
       // 2. If Unreal, try read .uplugin
       if (engine === 'unreal') {
-        // Need to find .uplugin file first. Since we don't have readdir in frontend exposed, 
-        // we'd need backend helper or just assume standard name? 
-        // Let's rely on package.json if exists, or basic defaults. 
-        // *Better approach*: We should have exposed a listFiles or similar. 
-        // But assuming user just picked the folder. 
-        // For this demo, let's assume we read package.json or init new. 
-        // NOTE: Real impl would parse .uplugin here. 
-        // For simplicity, let's simulate uplugin parsing if package.json is missing or simple.
         if (!pkg.name) {
             // Simulate extracting name from folder
             const folderName = folderPath.split(/[/\]/).pop();
@@ -768,7 +702,7 @@ function PublishView({ engine, settings }: { engine: string, settings: any }) {
                         onClick={handlePublish}
                         disabled={status === 'publishing'}
                         className={`mt-4 w-full py-3 rounded font-bold flex items-center justify-center gap-2 transition-colors ${status === 'publishing' 
-                            ? 'bg-slate-700 text-slate-400 cursor-wait'
+                            ? 'bg-slate-700 text-slate-400 cursor-wait' 
                             : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
                     >
                         {status === 'publishing' ? <RefreshCw className="animate-spin" /> : <Send size={18} />}
