@@ -1,16 +1,16 @@
 {
   "name": "my-plugin-manager",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && npm run electron:build",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "wait-on tcp:5173 && electron .",
-    "electron:build": "tsc electron/main.ts electron/preload.ts --outDir dist-electron --module commonjs --target es6 --moduleResolution node --esModuleInterop --skipLibCheck",
+    "electron:build": "tsc electron/main.ts electron/preload.ts --outDir dist-electron --module commonjs --target es6 --moduleResolution node --esModuleInterop --skipLibCheck && mv dist-electron/main.js dist-electron/main.cjs && mv dist-electron/preload.js dist-electron/preload.cjs",
     "dev:electron": "concurrently -k \"npm run dev\" \"npm run electron\""
   },
   "description": "A game tech package manager for Unreal and Unity.",
