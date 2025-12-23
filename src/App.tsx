@@ -167,9 +167,32 @@ export default function App() {
   };
 
   // Filter packages based on active tab and search
-  const displayedPackages = activeTab === 'project'
-    ? MOCK_REMOTE_PACKAGES.filter(p => installedPackages.some(i => i.id === p.id))
-    : MOCK_REMOTE_PACKAGES.filter(p => p.engines.includes(engine));
+  const displayedPackages: RegistryPackage[] = (() => {
+    if (activeTab === 'project') {
+      // For 'project' tab, source of truth is installedPackages
+      return installedPackages.map(inst => {
+        // Try to find metadata in registry
+        const meta = MOCK_REMOTE_PACKAGES.find(p => p.id === inst.id);
+        if (meta) {
+          return { ...meta, version: inst.version }; // Use installed version
+        }
+        // Fallback for packages not in registry
+        return {
+          id: inst.id,
+          name: inst.id, // Use ID as name
+          version: inst.version,
+          latest: '?',
+          description: 'Local package not found in registry.',
+          author: 'Unknown',
+          category: 'Local',
+          engines: [engine],
+          dependencies: []
+        };
+      });
+    }
+    // For registry/publish, source is the mock registry
+    return MOCK_REMOTE_PACKAGES.filter(p => p.engines.includes(engine));
+  })();
 
   const filteredPackages = displayedPackages.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
