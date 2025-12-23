@@ -133,7 +133,7 @@ export default function App() {
       const res = await window.electronAPI.installPackage({
         engine,
         projectPath,
-        packageId,
+        packageId: pkgId,
         version
       });
 
@@ -162,6 +162,7 @@ export default function App() {
 
   const handleUninstall = async (pkgId: string) => {
     // Placeholder: Real uninstall logic would be needed in electronAPI
+    console.log(`Uninstalling ${pkgId}`);
     alert("Uninstall not implemented in this demo.");
   };
 
@@ -584,7 +585,7 @@ export default function App() {
 }
 
 // Publish Component Mock
-function PublishView({ engine, theme }: { engine: string, theme: any }) {
+function PublishView({ engine }: { engine: string, theme?: any }) {
   const isUE = engine === 'unreal';
   const folder = isUE ? 'Plugins/' : 'Packages/';
   
