@@ -59,7 +59,7 @@ function App() {
       });
 
       if (res.success) {
-        setStatus({ type: 'success', msg: res.message });
+        setStatus({ type: 'success', msg: res.message || 'Operation successful' });
         handleScan(); // Refresh installed list
       } else {
         setStatus({ type: 'error', msg: res.error || 'Unknown error' });

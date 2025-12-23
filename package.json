@@ -68,6 +68,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "wait-on": "^9.0.3"
+    "wait-on": "^9.0.3",
+    "@tailwindcss/postcss": "^4.0.0"
   }
 }
