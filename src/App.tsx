@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, Download, Upload, Search, Settings, Layers, Folder, RefreshCw, CheckCircle, AlertCircle, Trash2, ArrowRight, Box, Save, FileCode, Send } from 'lucide-react';
+import { Package, Download, Upload, Search, Settings, Layers, Folder, RefreshCw, CheckCircle, AlertCircle, Trash2, Box, Save, FileCode, Send } from 'lucide-react';
 
 // --- Types ---
 type Engine = 'unreal' | 'unity';
@@ -495,7 +495,7 @@ function SettingsView({ settings, setSettings, onSave }: any) {
                             <input 
                                 type="text" 
                                 value={settings.unreal.release}
-                                onChange={(e) => setSettings({...settings, unreal: {...settings.unreal, release: e.target.value}})
+                                onChange={(e) => setSettings({...settings, unreal: {...settings.unreal, release: e.target.value}})}
                                 placeholder="https://nexus.company.com/repository/npm-release/"
                                 className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none transition-colors"
                             />
@@ -505,7 +505,7 @@ function SettingsView({ settings, setSettings, onSave }: any) {
                             <input 
                                 type="text" 
                                 value={settings.unreal.snapshot}
-                                onChange={(e) => setSettings({...settings, unreal: {...settings.unreal, snapshot: e.target.value}})
+                                onChange={(e) => setSettings({...settings, unreal: {...settings.unreal, snapshot: e.target.value}})}
                                 placeholder="https://nexus.company.com/repository/npm-snapshot/"
                                 className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none transition-colors"
                             />
@@ -525,7 +525,7 @@ function SettingsView({ settings, setSettings, onSave }: any) {
                             <input 
                                 type="text" 
                                 value={settings.unity.release}
-                                onChange={(e) => setSettings({...settings, unity: {...settings.unity, release: e.target.value}})
+                                onChange={(e) => setSettings({...settings, unity: {...settings.unity, release: e.target.value}})}
                                 placeholder="https://nexus.company.com/repository/upm-release/"
                                 className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-white focus:outline-none transition-colors"
                             />
@@ -535,7 +535,7 @@ function SettingsView({ settings, setSettings, onSave }: any) {
                             <input 
                                 type="text" 
                                 value={settings.unity.snapshot}
-                                onChange={(e) => setSettings({...settings, unity: {...settings.unity, snapshot: e.target.value}})
+                                onChange={(e) => setSettings({...settings, unity: {...settings.unity, snapshot: e.target.value}})}
                                 placeholder="https://nexus.company.com/repository/upm-snapshot/"
                                 className="w-full bg-black/30 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-white focus:outline-none transition-colors"
                             />
@@ -582,7 +582,7 @@ function PublishView({ engine, settings }: { engine: string, settings: any }) {
       if (engine === 'unreal') {
         if (!pkg.name) {
             // Simulate extracting name from folder
-            const folderName = folderPath.split(/[/\]/).pop();
+            const folderName = folderPath.split(/[\\/]/).pop();
             pkg.name = folderName?.toLowerCase();
             pkg.description = "Imported from .uplugin";
         }
