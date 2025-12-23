@@ -63,13 +63,13 @@ program
         if (fs.existsSync(pkgJson)) {
           const content = await fs.readJson(pkgJson);
           const deps = { ...content.dependencies, ...content.devDependencies };
-          packages = Object.entries(deps).map(([id, version]) => ({ id, version }));
+          packages = Object.entries(deps).map(([id, version]) => ({ id, version: version as string }));
         }
       } else {
         const manifest = path.join(projectPath, 'Packages', 'manifest.json');
         if (fs.existsSync(manifest)) {
           const content = await fs.readJson(manifest);
-          packages = Object.entries(content.dependencies || {}).map(([id, version]) => ({ id, version }));
+          packages = Object.entries(content.dependencies || {}).map(([id, version]) => ({ id, version: version as string }));
         }
       }
 
